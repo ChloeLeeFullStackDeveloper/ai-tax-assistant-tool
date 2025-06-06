@@ -1,286 +1,502 @@
-import React from 'react';
-import { Calculator, Zap, Lightbulb } from 'lucide-react';
-import { TaxCalculatorProps, TaxResults } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Calculator, MapPin, TrendingUp, DollarSign, FileText, Users } from 'lucide-react';
 
-const TaxCalculator: React.FC<TaxCalculatorProps> = ({
-  taxFormData,
-  setTaxFormData,
-  setError,
-  setIsLoading
-}) => {
+interface Province {
+  code: string;
+  name: string;
+  basicPersonal: number;
+  salesTax: string;
+}
 
-  // Canadian Tax Calculation Function
-  const calculateTax = (): TaxResults => {
-    const income = parseFloat(taxFormData.income) || 0;
-    const deductions = parseFloat(taxFormData.deductions) || 0;
-    const basicPersonalAmount = 15705; // 2024 Canadian Basic Personal Amount
-    const totalDeductions = Math.max(deductions, basicPersonalAmount);
-    const taxableIncome = Math.max(0, income - totalDeductions);
-    
-    // Canadian Federal Tax Brackets 2024
-    let federalTax = 0;
-    if (taxableIncome > 0) {
-      if (taxableIncome <= 55867) {
-        federalTax = taxableIncome * 0.15;
-      } else if (taxableIncome <= 111733) {
-        federalTax = 8380 + (taxableIncome - 55867) * 0.205;
-      } else if (taxableIncome <= 173205) {
-        federalTax = 19822 + (taxableIncome - 111733) * 0.26;
-      } else if (taxableIncome <= 246752) {
-        federalTax = 35814 + (taxableIncome - 173205) * 0.29;
-      } else {
-        federalTax = 57168 + (taxableIncome - 246752) * 0.33;
-      }
-    }
+interface TaxResult {
+  tax: number;
+  federalTax: number;
+  provincialTax: number;
+  cppContribution: number;
+  eiContribution: number;
+  refund: number;
+  effectiveRate: number;
+  taxableIncome: number;
+  basicPersonalAmount: number;
+  rrspRoom: number;
+  tfsaRoom: number;
+  marginalRate: number;
+  provinceName: string;
+  salesTax: string;
+  inputData: {
+    income: number;
+    deductions: number;
+    province: string;
+    filingStatus: string;
+  };
+}
 
-    // Estimate Provincial Tax (Ontario rates as example - ~10% average)
-    const provincialTax = taxableIncome * 0.10;
-    const totalTax = federalTax + provincialTax;
-
-    // CPP and EI Contributions
-    const maxCppEarnings = 68500;
-    const cppRate = 0.0595;
-    const cppContribution = Math.min((income - 3500) * cppRate, (maxCppEarnings - 3500) * cppRate);
-    
-    const maxEiEarnings = 65700;
-    const eiRate = 0.0229;
-    const eiContribution = Math.min(income * eiRate, maxEiEarnings * eiRate);
-
-    const totalTaxAndContributions = totalTax + cppContribution + eiContribution;
-
-    return {
-      tax: Math.round(totalTaxAndContributions),
-      taxableIncome: Math.round(taxableIncome),
-      effectiveRate: income > 0 ? ((totalTaxAndContributions / income) * 100) : 0,
-      estimatedRefund: Math.max(0, Math.round(income * 0.18 - totalTaxAndContributions)), // Estimate based on average withholding
-      federalTax: Math.round(federalTax),
-      provincialTax: Math.round(provincialTax),
-      cppContribution: Math.round(cppContribution),
-      eiContribution: Math.round(eiContribution)
+interface ComparisonData {
+  comparisons: Array<{
+    province: string;
+    provinceName: string;
+    totalTax: number;
+    federalTax: number;
+    provincialTax: number;
+    netIncome: number;
+    marginalRate: number;
+    basicPersonal: number;
+    salesTax: string;
+  }>;
+  summary: {
+    income: number;
+    bestProvince: {
+      province: string;
+      name: string;
+      totalTax: number;
+      netIncome: number;
     };
+    worstProvince: {
+      province: string;
+      name: string;
+      totalTax: number;
+      netIncome: number;
+    };
+    potentialSavings: number;
+    recommendations: string[];
+  };
+}
+
+const TaxCalculator: React.FC = () => {
+  // State management
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [selectedProvince, setSelectedProvince] = useState<string>('ON');
+  const [income, setIncome] = useState<string>('');
+  const [deductions, setDeductions] = useState<string>('15705');
+  const [filingStatus, setFilingStatus] = useState<string>('single');
+  const [taxResult, setTaxResult] = useState<TaxResult | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showComparison, setShowComparison] = useState<boolean>(false);
+  const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+
+  useEffect(() => {
+    fetchProvinces();
+    // Get user's saved province if logged in
+    const savedProvince = localStorage.getItem('userProvince');
+    if (savedProvince) {
+      setSelectedProvince(savedProvince);
+    }
+  }, []);
+
+  const fetchProvinces = async (): Promise<void> => {
+    try {
+      const response = await fetch('http://localhost:3001/api/provinces');
+      const data = await response.json();
+      if (data.success) {
+        setProvinces(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching provinces:', error);
+    }
   };
 
-  const taxResults = calculateTax();
-
-  // Handle AI-powered calculation
-  const handleTaxCalculation = async () => {
-    setIsLoading(true);
-    setError('');
+  const handleProvinceChange = async (provinceCode: string): Promise<void> => {
+    setSelectedProvince(provinceCode);
+    localStorage.setItem('userProvince', provinceCode);
     
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In real implementation, call API:
-      // const token = localStorage.getItem('authToken');
-      // const result = await apiService.calculateTax(token, taxFormData);
-      
-      alert(`🧮 AI Calculation Complete!\n💰 Tax Owed: $${taxResults.tax.toLocaleString()}\n💸 Estimated Refund: $${taxResults.estimatedRefund.toLocaleString()}\n📊 Effective Rate: ${taxResults.effectiveRate.toFixed(2)}%\n🎯 AI Confidence: 94%`);
-
-    } catch (err: any) {
-      setError(err.message || 'Failed to calculate taxes. Please try again.');
-      console.error('Tax calculation error:', err);
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      try {
+        const response = await fetch('http://localhost:3001/api/user/province', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ province: provinceCode })
+        });
+        
+        if (!response.ok) {
+          console.warn('Could not save province preference');
+        }
+      } catch (error) {
+        console.error('Error updating province:', error);
+      }
     }
-    setIsLoading(false);
+  };
+
+  const calculateTax = async (): Promise<void> => {
+    if (!income || parseFloat(income) <= 0) {
+      alert('Please enter a valid income amount');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:3001/api/tax/calculate-by-province', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          income: parseFloat(income),
+          deductions: parseFloat(deductions),
+          province: selectedProvince,
+          filingStatus
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTaxResult(data.data);
+      } else {
+        alert('Error calculating taxes: ' + data.message);
+      }
+    } catch (error) {
+      console.error('Error calculating taxes:', error);
+      alert('Error calculating taxes. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const compareProvinces = async (): Promise<void> => {
+    if (!income || parseFloat(income) <= 0) {
+      alert('Please enter an income amount first');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const selectedProvinces = ['ON', 'BC', 'AB', 'QC']; // Top 4 provinces
+      
+      const response = await fetch('http://localhost:3001/api/tax/compare-provinces', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        },
+        body: JSON.stringify({
+          income: parseFloat(income),
+          deductions: parseFloat(deductions),
+          provinces: selectedProvinces
+        })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setComparisonData(data.data);
+        setShowComparison(true);
+      }
+    } catch (error) {
+      console.error('Error comparing provinces:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getProvinceFlag = (code: string): string => {
+    const flags: Record<string, string> = {
+      'ON': '🍁', 'BC': '🏔️', 'AB': '⛽', 'SK': '🌾', 'MB': '🦬',
+      'QC': '⚜️', 'NB': '🦞', 'NS': '🦞', 'PE': '🥔', 'NL': '🐟',
+      'YT': '❄️', 'NT': '💎', 'NU': '🐻‍❄️'
+    };
+    return flags[code] || '🍁';
+  };
+
+  const getCurrentProvinceName = (): string => {
+    return provinces.find(p => p.code === selectedProvince)?.name || 'Ontario';
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Canadian Tax Calculator</h2>
-        <div className="flex items-center bg-green-50 px-3 py-2 rounded-lg">
-          <Zap className="h-4 w-4 text-green-600 mr-2" />
-          <span className="text-sm text-green-600 font-medium">CRA Tax Engine</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Input Form */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Tax Information</h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Annual Income (CAD)</label>
-              <input
-                type="number"
-                value={taxFormData.income}
-                onChange={(e) => setTaxFormData({...taxFormData, income: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter annual income"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Total Deductions (CAD)</label>
-              <input
-                type="number"
-                value={taxFormData.deductions}
-                onChange={(e) => setTaxFormData({...taxFormData, deductions: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter total deductions"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Minimum: $15,705 (Basic Personal Amount 2024)
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Filing Status</label>
-              <select
-                value={taxFormData.filingStatus}
-                onChange={(e) => setTaxFormData({...taxFormData, filingStatus: e.target.value as any})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="single">Single</option>
-                <option value="married_joint">Married Filing Jointly</option>
-                <option value="married_separate">Married Filing Separately</option>
-                <option value="head_of_household">Head of Household</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tax Year</label>
-              <select
-                value={taxFormData.taxYear}
-                onChange={(e) => setTaxFormData({...taxFormData, taxYear: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="2024">2024</option>
-                <option value="2023">2023</option>
-                <option value="2022">2022</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleTaxCalculation}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 flex items-center justify-center transition-colors"
-            >
-              <Calculator className="h-5 w-5 mr-2" />
-              Calculate with AI
-            </button>
-          </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="container mx-auto px-4 max-w-6xl">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">🇨🇦 Canadian Tax Calculator</h1>
+          <p className="text-xl text-gray-600">Calculate your 2024 taxes for any Canadian province</p>
         </div>
 
-        {/* Results Panel */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4">Real-time Results</h3>
-          
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-              <span className="font-medium">Total Tax + CPP/EI:</span>
-              <span className="text-xl font-bold text-red-600">${taxResults.tax.toLocaleString()}</span>
-            </div>
-            
-            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-              <span className="font-medium">Estimated Refund:</span>
-              <span className="text-xl font-bold text-green-600">${taxResults.estimatedRefund.toLocaleString()}</span>
-            </div>
-            
-            <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-              <span className="font-medium">Effective Tax Rate:</span>
-              <span className="text-xl font-bold text-blue-600">{taxResults.effectiveRate.toFixed(2)}%</span>
-            </div>
-            
-            <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-              <span className="font-medium">Taxable Income:</span>
-              <span className="text-xl font-bold text-purple-600">${taxResults.taxableIncome.toLocaleString()}</span>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Column: Province Selection */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <MapPin className="w-5 h-5 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Select Province</h2>
+              </div>
+              
+              <div className="space-y-2">
+                {provinces.map((province) => (
+                  <button
+                    key={province.code}
+                    onClick={() => handleProvinceChange(province.code)}
+                    className={`w-full p-3 rounded-lg border-2 transition-all duration-200 text-left ${
+                      selectedProvince === province.code
+                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xl">{getProvinceFlag(province.code)}</span>
+                      <div className="flex-1">
+                        <div className="font-medium text-sm">{province.name}</div>
+                        <div className="text-xs text-gray-500">
+                          Basic: ${province.basicPersonal.toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
 
-            {/* Canadian Tax Breakdown */}
-            <div className="bg-gray-50 rounded-lg p-3">
-              <h4 className="font-medium mb-2 text-gray-700">Tax Breakdown</h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Federal Tax:</span>
-                  <span className="font-medium">${taxResults.federalTax.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Provincial Tax:</span>
-                  <span className="font-medium">${taxResults.provincialTax.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>CPP Contribution:</span>
-                  <span className="font-medium">${taxResults.cppContribution.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>EI Premium:</span>
-                  <span className="font-medium">${taxResults.eiContribution.toLocaleString()}</span>
+              {/* Current Selection */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">{getProvinceFlag(selectedProvince)}</span>
+                  <div>
+                    <p className="font-medium text-blue-900 text-sm">
+                      Selected: {getCurrentProvinceName()}
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      Tax calculations for this province
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Canadian Tax Insights */}
-          {parseFloat(taxFormData.income) > 0 && (
-            <div className="mt-6 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg border border-yellow-200">
-              <h4 className="font-semibold text-orange-800 mb-2 flex items-center">
-                <Lightbulb className="h-4 w-4 mr-2" />
-                CRA Tax Optimization Insights
-              </h4>
-              <div className="text-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <span>🍁 CRA Compliance Level:</span>
-                  <span className="font-bold">94%</span>
+          {/* Center Column: Tax Calculator */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <div className="flex items-center space-x-2 mb-6">
+                <Calculator className="w-6 h-6 text-green-600" />
+                <h2 className="text-2xl font-semibold text-gray-900">Tax Calculator</h2>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Income Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Annual Income
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      value={income}
+                      onChange={(e) => setIncome(e.target.value)}
+                      className="w-full pl-8 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
+                      placeholder="75,000"
+                    />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>💰 RRSP Room Optimization:</span>
-                  <span className="font-bold text-green-600">
-                    ${(Math.min(parseFloat(taxFormData.income) * 0.18, 31560) || 0).toFixed(0)}
-                  </span>
+
+                {/* Deductions Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Total Deductions
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      value={deductions}
+                      onChange={(e) => setDeductions(e.target.value)}
+                      className="w-full pl-8 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Basic personal amount for {getCurrentProvinceName()}
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>🏠 TFSA Contribution Room:</span>
-                  <span className="font-bold text-blue-600">$7,000</span>
+
+                {/* Filing Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filing Status
+                  </label>
+                  <select
+                    value={filingStatus}
+                    onChange={(e) => setFilingStatus(e.target.value)}
+                    className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
+                  >
+                    <option value="single">Single</option>
+                    <option value="married_joint">Married (Joint)</option>
+                    <option value="married_separate">Married (Separate)</option>
+                    <option value="head_of_household">Head of Household</option>
+                  </select>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span>📊 Marginal Tax Rate:</span>
-                  <span className="font-bold text-purple-600">
-                    {parseFloat(taxFormData.income) <= 55867 ? '15%' : 
-                     parseFloat(taxFormData.income) <= 111733 ? '20.5%' : 
-                     parseFloat(taxFormData.income) <= 173205 ? '26%' : '29%'} Federal
-                  </span>
+
+                {/* Province Display */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Province/Territory
+                  </label>
+                  <div className="w-full px-3 py-3 border border-gray-200 rounded-lg bg-gray-50 text-lg flex items-center space-x-2">
+                    <span>{getProvinceFlag(selectedProvince)}</span>
+                    <span className="font-medium">{getCurrentProvinceName()}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Tax Planning Tips */}
-      {parseFloat(taxFormData.income) > 50000 && (
-        <div className="mt-6 bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold mb-4 text-green-700">🍁 Canadian Tax Planning Tips</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">RRSP Optimization</h4>
-              <p className="text-sm text-green-700">
-                Maximize your RRSP contribution (18% of income, max $31,560) to reduce taxable income.
-                Estimated savings: ${(parseFloat(taxFormData.income) * 0.18 * 0.35 || 0).toFixed(0)}
-              </p>
-            </div>
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-800 mb-2">TFSA Strategy</h4>
-              <p className="text-sm text-blue-700">
-                Use your $7,000 TFSA contribution room for tax-free growth.
-                All investment gains are tax-free!
-              </p>
-            </div>
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">Tax Credits</h4>
-              <p className="text-sm text-purple-700">
-                Don't forget non-refundable tax credits: medical expenses, charitable donations, tuition fees.
-              </p>
-            </div>
-            <div className="p-4 bg-orange-50 rounded-lg">
-              <h4 className="font-medium text-orange-800 mb-2">Home Office Deduction</h4>
-              <p className="text-sm text-orange-700">
-                Working from home? Claim home office expenses using the simplified method or detailed method.
-              </p>
+              {/* Calculate Buttons */}
+              <div className="flex space-x-4 mb-6">
+                <button
+                  onClick={calculateTax}
+                  disabled={isLoading || !income}
+                  className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white py-3 px-6 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                  <Calculator className="w-5 h-5" />
+                  <span>{isLoading ? 'Calculating...' : 'Calculate Tax'}</span>
+                </button>
+                
+                <button
+                  onClick={compareProvinces}
+                  disabled={isLoading || !income}
+                  className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white py-3 px-6 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2"
+                >
+                  <TrendingUp className="w-5 h-5" />
+                  <span>Compare Provinces</span>
+                </button>
+              </div>
+
+              {/* Tax Results */}
+              {taxResult && (
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                    <DollarSign className="w-5 h-5 text-green-600" />
+                    <span>Tax Calculation Results for {taxResult.provinceName}</span>
+                  </h3>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="bg-white p-3 rounded-lg">
+                      <div className="text-sm text-gray-600">Total Tax</div>
+                      <div className="text-xl font-bold text-red-600">
+                        ${taxResult.tax.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <div className="text-sm text-gray-600">Net Income</div>
+                      <div className="text-xl font-bold text-green-600">
+                        ${(taxResult.inputData.income - taxResult.tax).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <div className="text-sm text-gray-600">Effective Rate</div>
+                      <div className="text-xl font-bold text-blue-600">
+                        {taxResult.effectiveRate}%
+                      </div>
+                    </div>
+                    <div className="bg-white p-3 rounded-lg">
+                      <div className="text-sm text-gray-600">Marginal Rate</div>
+                      <div className="text-xl font-bold text-purple-600">
+                        {taxResult.marginalRate}%
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div className="text-gray-600">Federal Tax</div>
+                      <div className="font-semibold">${taxResult.federalTax.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Provincial Tax</div>
+                      <div className="font-semibold">${taxResult.provincialTax.toLocaleString()}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">CPP + EI</div>
+                      <div className="font-semibold">
+                        ${(taxResult.cppContribution + taxResult.eiContribution).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RRSP/TFSA Info */}
+                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                    <div className="text-sm font-medium text-yellow-800 mb-2">💡 Optimization Opportunities:</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-yellow-700">RRSP Room: </span>
+                        <span className="font-semibold">${taxResult.rrspRoom.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-yellow-700">TFSA Room: </span>
+                        <span className="font-semibold">${taxResult.tfsaRoom.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Province Comparison Results */}
+              {showComparison && comparisonData && (
+                <div className="mt-6 bg-white border-2 border-blue-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Province Tax Comparison
+                  </h3>
+                  
+                  <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-600">Best Province (Lowest Tax)</div>
+                        <div className="font-semibold text-green-700">
+                          {comparisonData.summary.bestProvince.name}
+                        </div>
+                        <div className="text-sm">
+                          Total Tax: ${comparisonData.summary.bestProvince.totalTax.toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-600">Potential Savings</div>
+                        <div className="font-semibold text-blue-700">
+                          ${comparisonData.summary.potentialSavings.toLocaleString()}
+                        </div>
+                        <div className="text-sm text-gray-500">vs highest tax province</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Province</th>
+                          <th className="text-right py-2">Total Tax</th>
+                          <th className="text-right py-2">Net Income</th>
+                          <th className="text-right py-2">Marginal Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonData.comparisons
+                          .sort((a, b) => a.totalTax - b.totalTax)
+                          .map((comp) => (
+                          <tr key={comp.province} className="border-b hover:bg-gray-50">
+                            <td className="py-2">
+                              <div className="flex items-center space-x-2">
+                                <span>{getProvinceFlag(comp.province)}</span>
+                                <span className="font-medium">{comp.provinceName}</span>
+                              </div>
+                            </td>
+                            <td className="text-right py-2 font-mono">
+                              ${comp.totalTax.toLocaleString()}
+                            </td>
+                            <td className="text-right py-2 font-mono text-green-600">
+                              ${comp.netIncome.toLocaleString()}
+                            </td>
+                            <td className="text-right py-2">
+                              {comp.marginalRate}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

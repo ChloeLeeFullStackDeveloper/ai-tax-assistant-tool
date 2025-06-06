@@ -75,6 +75,7 @@ export interface ChatModalProps {
   activeTab: string;
   taxFormData: TaxFormData;
   uploadedFiles: UploadedFile[];
+  selectedProvince: string;
 }
 
 export interface DashboardProps {

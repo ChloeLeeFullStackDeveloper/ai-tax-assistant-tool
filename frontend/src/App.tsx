@@ -1,11 +1,9 @@
-// App.tsx - Fixed Main Application Component
 import React, { useState, useEffect } from 'react';
 import { 
   Calculator, FileText, User, Brain, BarChart3, ClipboardList, 
-  MessageCircle, RefreshCw, X, AlertCircle, Shield
+  MessageCircle, RefreshCw, X, AlertCircle, Shield, MapPin
 } from 'lucide-react';
 
-// Import components
 import AuthModal from './components/AuthModal';
 import ChatModal from './components/ChatModal';
 import Dashboard from './components/Dashboard';
@@ -14,29 +12,38 @@ import TaxForms from './components/TaxForms';
 import TaxCalculator from './components/TaxCalculator';
 import Profile from './components/Profile';
 import { User as UserType, TaxFormData, ChatMessage, UploadedFile, AIInsight } from './types';
+import { ChatModalProps } from './types';
 
 type ActiveTab = 'Dashboard' | 'Documents' | 'Tax Forms' | 'Calculator' | 'Profile';
 
+interface Province {
+  code: string;
+  name: string;
+  basicPersonal: number;
+  salesTax: string;
+}
+
 const App: React.FC = () => {
-  // Authentication State
+
   const [user, setUser] = useState<UserType | null>(null);
   const [showLogin, setShowLogin] = useState<boolean>(!localStorage.getItem('authToken'));
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
-  // State Management
   const [activeTab, setActiveTab] = useState<ActiveTab>('Dashboard');
   const [showChat, setShowChat] = useState<boolean>(false);
   
-  // Form Data
+  const [provinces, setProvinces] = useState<Province[]>([]);
+  const [selectedProvince, setSelectedProvince] = useState<string>('ON');
+  const [showProvinceSelector, setShowProvinceSelector] = useState<boolean>(false);
+  
   const [taxFormData, setTaxFormData] = useState<TaxFormData>({
     income: '',
-    deductions: '',
+    deductions: '15705',
     filingStatus: 'single',
     taxYear: '2024'
   });
 
-  // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       type: 'bot',
@@ -47,11 +54,9 @@ const App: React.FC = () => {
     }
   ]);
 
-  // Document State
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<UploadedFile | null>(null);
 
-  // AI Insights State - Fixed variable name
   const [aiInsights, setAiInsights] = useState<AIInsight[]>([
     {
       id: '1',
@@ -81,22 +86,107 @@ const App: React.FC = () => {
     }
   ]);
 
-  // Initialize app
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     if (token) {
-      // Simulate user load for demo
       setUser({ id: '1', name: 'John Doe', email: 'john.doe@example.com' });
       setShowLogin(false);
     }
+    
+    fetchProvinces();
+    const savedProvince = localStorage.getItem('userProvince');
+    if (savedProvince) {
+      setSelectedProvince(savedProvince);
+    }
   }, []);
+
+  const fetchProvinces = async (): Promise<void> => {
+    try {
+      const response = await fetch('http://localhost:3001/api/provinces');
+      const data = await response.json();
+      if (data.success) {
+        setProvinces(data.data);
+      } else {
+        setProvinces([
+          { code: 'ON', name: 'Ontario', basicPersonal: 11865, salesTax: 'HST: 13%' },
+          { code: 'BC', name: 'British Columbia', basicPersonal: 11980, salesTax: 'GST: 5% + PST: 7%' },
+          { code: 'AB', name: 'Alberta', basicPersonal: 21003, salesTax: 'GST: 5%' },
+          { code: 'QC', name: 'Quebec', basicPersonal: 18056, salesTax: 'GST: 5% + QST: 9.975%' },
+          { code: 'MB', name: 'Manitoba', basicPersonal: 15000, salesTax: 'GST: 5% + PST: 7%' },
+          { code: 'SK', name: 'Saskatchewan', basicPersonal: 17661, salesTax: 'GST: 5% + PST: 6%' },
+          { code: 'NB', name: 'New Brunswick', basicPersonal: 12458, salesTax: 'HST: 15%' },
+          { code: 'NS', name: 'Nova Scotia', basicPersonal: 8744, salesTax: 'HST: 15%' },
+          { code: 'PE', name: 'Prince Edward Island', basicPersonal: 12500, salesTax: 'HST: 15%' },
+          { code: 'NL', name: 'Newfoundland and Labrador', basicPersonal: 10382, salesTax: 'HST: 15%' },
+          { code: 'YT', name: 'Yukon', basicPersonal: 15705, salesTax: 'GST: 5%' },
+          { code: 'NT', name: 'Northwest Territories', basicPersonal: 16593, salesTax: 'GST: 5%' },
+          { code: 'NU', name: 'Nunavut', basicPersonal: 18767, salesTax: 'GST: 5%' }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error fetching provinces:', error);
+      setProvinces([
+        { code: 'ON', name: 'Ontario', basicPersonal: 11865, salesTax: 'HST: 13%' },
+        { code: 'BC', name: 'British Columbia', basicPersonal: 11980, salesTax: 'GST: 5% + PST: 7%' },
+        { code: 'AB', name: 'Alberta', basicPersonal: 21003, salesTax: 'GST: 5%' },
+        { code: 'QC', name: 'Quebec', basicPersonal: 18056, salesTax: 'GST: 5% + QST: 9.975%' }
+      ]);
+    }
+  };
+
+  const handleProvinceChange = async (provinceCode: string): Promise<void> => {
+    setSelectedProvince(provinceCode);
+    localStorage.setItem('userProvince', provinceCode);
+    setShowProvinceSelector(false);
+    
+    const selectedProvinceData = provinces.find(p => p.code === provinceCode);
+    if (selectedProvinceData) {
+      setTaxFormData(prev => ({
+        ...prev,
+        deductions: selectedProvinceData.basicPersonal.toString()
+      }));
+    }
+    
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      try {
+        const response = await fetch('http://localhost:3001/api/user/province', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ province: provinceCode })
+        });
+        
+        if (!response.ok) {
+          console.warn('Could not save province preference');
+        }
+      } catch (error) {
+        console.error('Error updating province:', error);
+      }
+    }
+  };
+
+  const getProvinceFlag = (code: string): string => {
+    const flags: Record<string, string> = {
+      'ON': '🍁', 'BC': '🏔️', 'AB': '⛽', 'SK': '🌾', 'MB': '🦬',
+      'QC': '⚜️', 'NB': '🦞', 'NS': '🦞', 'PE': '🥔', 'NL': '🐟',
+      'YT': '❄️', 'NT': '💎', 'NU': '🐻‍❄️'
+    };
+    return flags[code] || '🍁';
+  };
+
+  // Get current province name
+  const getCurrentProvinceName = (): string => {
+    return provinces.find(p => p.code === selectedProvince)?.name || 'Ontario';
+  };
 
   // Authentication handlers
   const handleLogin = async (loginData: { email: string; password: string }) => {
     setIsLoading(true);
     setError('');
     try {
-      // Simulate login
       setUser({ id: '1', name: 'John Doe', email: loginData.email });
       localStorage.setItem('authToken', 'demo_token');
       setShowLogin(false);
@@ -110,7 +200,6 @@ const App: React.FC = () => {
     setIsLoading(true);
     setError('');
     try {
-      // Simulate registration
       setUser({ id: '1', name: registerData.name, email: registerData.email });
       localStorage.setItem('authToken', 'demo_token');
       setShowLogin(false);
@@ -122,8 +211,10 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('userProvince');
     setUser(null);
     setShowLogin(true);
+    setSelectedProvince('ON');
     setAiInsights([]);
     setUploadedFiles([]);
     setChatMessages([{
@@ -137,7 +228,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Show login modal if not authenticated */}
       {showLogin && (
         <AuthModal
           onLogin={handleLogin}
@@ -146,6 +236,79 @@ const App: React.FC = () => {
           error={error}
           setError={setError}
         />
+      )}
+
+      {showProvinceSelector && user && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) {
+              setShowProvinceSelector(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-xl font-semibold text-gray-900">Select Your Province</h2>
+                </div>
+                <button
+                  onClick={() => setShowProvinceSelector(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-96">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {provinces.map((province) => (
+                  <button
+                    key={province.code}
+                    onClick={() => handleProvinceChange(province.code)}
+                    className={`p-4 rounded-lg border-2 transition-all duration-200 text-left hover:shadow-md ${
+                      selectedProvince === province.code
+                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{getProvinceFlag(province.code)}</span>
+                      <div>
+                        <div className="font-medium">{province.name}</div>
+                        <div className="text-sm text-gray-500">
+                          Basic Personal: ${province.basicPersonal.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-gray-400">{province.salesTax}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xl">{getProvinceFlag(selectedProvince)}</span>
+                  <span className="font-medium text-gray-900">
+                    Current: {getCurrentProvinceName()}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowProvinceSelector(false)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -187,13 +350,29 @@ const App: React.FC = () => {
                 </nav>
 
                 <div className="flex items-center gap-4">
+                  {/* Province Selector Button - Fixed click handler */}
                   <button
-                    onClick={() => setShowChat(true)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowProvinceSelector(true);
+                    }}
                     className="bg-white bg-opacity-20 text-white px-3 py-2 rounded-lg hover:bg-opacity-30 transition-colors flex items-center gap-2"
                     disabled={isLoading}
+                    title={`Current province: ${getCurrentProvinceName()}`}
                   >
-                    <MessageCircle className="h-4 w-4" />
-                    AI Chat
+                    <MapPin className="h-4 w-4" />
+                    <span className="text-lg">{getProvinceFlag(selectedProvince)}</span>
+                    <span className="hidden sm:inline">{selectedProvince}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowChat(true)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                  >
+                    <MessageCircle className="h-8 w-8 mb-3" />
+                    <h3 className="text-lg font-semibold mb-2">🍁 AI Tax Assistant</h3>
+                    <p className="text-sm opacity-90">Get instant Canadian tax advice and calculations</p>
                   </button>
                   <div className="text-white text-sm">
                     Welcome, {user?.name || 'User'}
@@ -211,6 +390,28 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* Province Banner */}
+      {user && (
+        <div className="bg-blue-50 border-b border-blue-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">{getProvinceFlag(selectedProvince)}</span>
+                <span className="text-blue-800 text-sm">
+                  Tax calculations for <strong>{getCurrentProvinceName()}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => setShowProvinceSelector(true)}
+                className="text-blue-600 hover:text-blue-700 text-sm underline"
+              >
+                Change Province
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content - Only show if authenticated */}
       {user && (
         <main>
@@ -224,7 +425,7 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* Error Banner */}
+         {/* Error Banner */}
           {error && (
             <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 m-4">
               <div className="flex items-center">
@@ -249,6 +450,7 @@ const App: React.FC = () => {
               setShowChat={setShowChat}
             />
           )}
+
           {activeTab === 'Documents' && (
             <Documents
               uploadedFiles={uploadedFiles}
@@ -259,6 +461,7 @@ const App: React.FC = () => {
               setIsLoading={setIsLoading}
             />
           )}
+
           {activeTab === 'Tax Forms' && (
             <TaxForms
               taxFormData={taxFormData}
@@ -267,6 +470,7 @@ const App: React.FC = () => {
               setIsLoading={setIsLoading}
             />
           )}
+
           {activeTab === 'Calculator' && (
             <TaxCalculator
               taxFormData={taxFormData}
@@ -275,6 +479,7 @@ const App: React.FC = () => {
               setIsLoading={setIsLoading}
             />
           )}
+
           {activeTab === 'Profile' && (
             <Profile
               user={user}
@@ -291,7 +496,7 @@ const App: React.FC = () => {
         <ChatModal
           chatMessages={chatMessages}
           setChatMessages={setChatMessages}
-          setShowChat={setShowChat}
+          setShowChat={setShowChat}  // ✅ This is correct - not onClose
           isLoading={isLoading}
           setIsLoading={setIsLoading}
           activeTab={activeTab}
@@ -299,7 +504,7 @@ const App: React.FC = () => {
           uploadedFiles={uploadedFiles}
         />
       )}
-
+      
       {/* Footer */}
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
