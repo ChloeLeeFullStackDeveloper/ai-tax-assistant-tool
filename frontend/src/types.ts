@@ -11,6 +11,7 @@ export interface ChatMessage {
   time: string;
   confidence?: number;
   aiInsight?: boolean;
+  isError?: boolean;
 }
 
 export interface UploadedFile {
@@ -102,12 +103,9 @@ export interface TaxFormsProps {
 }
 
 export interface TaxCalculatorProps {
-  taxFormData: TaxFormData;
-  setTaxFormData: React.Dispatch<React.SetStateAction<TaxFormData>>;
-  setError: (error: string) => void;
-  setIsLoading: (loading: boolean) => void;
+  selectedProvince: string;
+  setSelectedProvince: (province: string) => void;
 }
-
 export interface ProfileProps {
   user: User | null;
   uploadedFiles: UploadedFile[];

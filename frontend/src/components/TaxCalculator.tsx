@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, MapPin, TrendingUp, DollarSign, FileText, Users } from 'lucide-react';
+import { Calculator, MapPin, TrendingUp, DollarSign} from 'lucide-react';
+import { TaxCalculatorProps } from '../types';
 
 interface Province {
   code: string;
@@ -62,10 +63,9 @@ interface ComparisonData {
   };
 }
 
-const TaxCalculator: React.FC = () => {
-  // State management
+const TaxCalculator: React.FC<TaxCalculatorProps> = ({ selectedProvince, setSelectedProvince }) => {
+
   const [provinces, setProvinces] = useState<Province[]>([]);
-  const [selectedProvince, setSelectedProvince] = useState<string>('ON');
   const [income, setIncome] = useState<string>('');
   const [deductions, setDeductions] = useState<string>('15705');
   const [filingStatus, setFilingStatus] = useState<string>('single');

@@ -473,11 +473,10 @@ const App: React.FC = () => {
 
           {activeTab === 'Calculator' && (
             <TaxCalculator
-              taxFormData={taxFormData}
-              setTaxFormData={setTaxFormData}
-              setError={setError}
-              setIsLoading={setIsLoading}
-            />
+            selectedProvince={selectedProvince}
+            setSelectedProvince={handleProvinceChange}
+          />
+          
           )}
 
           {activeTab === 'Profile' && (
@@ -496,12 +495,13 @@ const App: React.FC = () => {
         <ChatModal
           chatMessages={chatMessages}
           setChatMessages={setChatMessages}
-          setShowChat={setShowChat}  // ✅ This is correct - not onClose
+          setShowChat={setShowChat} 
           isLoading={isLoading}
           setIsLoading={setIsLoading}
           activeTab={activeTab}
           taxFormData={taxFormData}
           uploadedFiles={uploadedFiles}
+          selectedProvince={selectedProvince}
         />
       )}
       
