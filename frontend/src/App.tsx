@@ -12,7 +12,6 @@ import TaxForms from './components/TaxForms';
 import TaxCalculator from './components/TaxCalculator';
 import Profile from './components/Profile';
 import { User as UserType, TaxFormData, ChatMessage, UploadedFile, AIInsight } from './types';
-import { ChatModalProps } from './types';
 
 type ActiveTab = 'Dashboard' | 'Documents' | 'Tax Forms' | 'Calculator' | 'Profile';
 
@@ -350,7 +349,7 @@ const App: React.FC = () => {
                 </nav>
 
                 <div className="flex items-center gap-4">
-                  {/* Province Selector Button - Fixed click handler */}
+                  {/* Province Selector Button */}
                   <button
                     onClick={(e) => {
                       e.preventDefault();
@@ -368,11 +367,10 @@ const App: React.FC = () => {
 
                   <button
                     onClick={() => setShowChat(true)}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center gap-2"
                   >
-                    <MessageCircle className="h-8 w-8 mb-3" />
-                    <h3 className="text-lg font-semibold mb-2">🍁 AI Tax Assistant</h3>
-                    <p className="text-sm opacity-90">Get instant Canadian tax advice and calculations</p>
+                    <MessageCircle className="h-5 w-5" />
+                    <span className="text-sm font-medium">🍁 AI Tax Assistant</span>
                   </button>
                   <div className="text-white text-sm">
                     Welcome, {user?.name || 'User'}
@@ -476,7 +474,6 @@ const App: React.FC = () => {
             selectedProvince={selectedProvince}
             setSelectedProvince={handleProvinceChange}
           />
-          
           )}
 
           {activeTab === 'Profile' && (

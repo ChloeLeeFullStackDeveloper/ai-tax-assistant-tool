@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const fs = require('fs');
+const { enhancedCanadianTaxAI } = require('./ai-chatbot-enhanced');
 
 dotenv.config();
 
@@ -579,52 +580,233 @@ app.post('/api/tax/compare-provinces', authenticateToken, [
 
 // AI Chat route
 app.post('/api/ai/chat', authenticateToken, [
-  body('message').trim().isLength({ min: 1 }),
+  body('message').trim().isLength({ min: 1, max: 1000 }),
   body('context').optional().isObject()
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
-      message: 'Validation errors',
+      message: 'Invalid input',
       errors: errors.array()
     });
   }
 
   try {
     const { message, context = {} } = req.body;
-    const user = await findUserData({ id: req.userId });
-
+    const userId = req.userId;
+    
+    console.log(`🤖 AI Chat Request from user ${userId}: "${message.substring(0, 50)}..."`);
+    
+    // Get user data for context
+    const user = await findUserData({ id: userId });
+    
+    // Build comprehensive user context
     const userContext = {
+      // User profile data
+      userName: user?.name,
+      userEmail: user?.email,
       province: user?.province || context.selectedProvince || 'ON',
-      income: context.taxFormData?.income || null,
+      
+      // Tax form data
+      income: context.taxFormData?.income ? parseFloat(context.taxFormData.income) : null,
+      deductions: context.taxFormData?.deductions ? parseFloat(context.taxFormData.deductions) : null,
       filingStatus: context.taxFormData?.filingStatus || null,
+      taxYear: context.taxFormData?.taxYear || '2024',
+      
+      // App context
+      activeTab: context.activeTab || 'Dashboard',
       hasDocuments: (context.documentsCount || 0) > 0,
       documentCount: context.documentsCount || 0,
-      userName: user?.name,
+      uploadedFileTypes: context.uploadedFileTypes || [],
+      
+      // Chat history context
+      chatHistory: context.chatHistory || [],
+      
+      // Additional context
+      timestamp: new Date().toISOString(),
+      userAgent: req.get('User-Agent'),
       ...context
     };
 
-    const aiResponse = generateEnhancedCanadianTaxResponse(message, userContext);
+    console.log(`📊 Context for user ${userId}:`, {
+      province: userContext.province,
+      income: userContext.income ? `$${userContext.income.toLocaleString()}` : 'Not provided',
+      hasDocuments: userContext.hasDocuments,
+      activeTab: userContext.activeTab
+    });
+
+    // Generate AI response using enhanced system
+    const startTime = Date.now();
+    const aiResponse = await enhancedCanadianTaxAI.generateResponse(message, userId, userContext);
+    const responseTime = Date.now() - startTime;
+    
+    console.log(`✅ AI Response generated in ${responseTime}ms with confidence: ${aiResponse.confidence}%`);
+
+    // Format response for frontend
+    const formattedResponse = {
+      message: aiResponse.message,
+      confidence: aiResponse.confidence,
+      sources: aiResponse.sources || ['Canadian Tax AI Assistant'],
+      aiInsight: aiResponse.aiInsight !== false,
+      suggestedActions: aiResponse.suggestedActions || [],
+      responseType: aiResponse.responseType || 'general',
+      timestamp: aiResponse.timestamp,
+      metadata: {
+        userId: userId,
+        responseTime: responseTime,
+        fromCache: aiResponse.fromCache || false,
+        tokensUsed: aiResponse.tokens_used || 0,
+        conversationId: aiResponse.conversationId
+      }
+    };
+
+    // Log successful interaction
+    console.log(`💬 Successful AI chat interaction:`, {
+      userId,
+      messageLength: message.length,
+      responseType: aiResponse.responseType,
+      confidence: aiResponse.confidence,
+      fromCache: aiResponse.fromCache,
+      responseTime: `${responseTime}ms`
+    });
 
     res.json({
       success: true,
-      data: {
-        message: aiResponse.message,
-        confidence: aiResponse.confidence,
-        sources: aiResponse.sources,
-        aiInsight: aiResponse.aiInsight,
-        suggestedActions: aiResponse.suggestedActions,
-        responseType: aiResponse.responseType,
-        timestamp: new Date().toISOString()
-      }
+      data: formattedResponse
     });
 
   } catch (error) {
-    console.error('AI chat error:', error);
+    console.error('❌ AI Chat Error:', error);
+    
+    // Enhanced error response
+    const errorResponse = {
+      message: "I apologize, but I'm having trouble processing your request right now. Let me try to help with a general Canadian tax response instead!\n\n🇨🇦 I can assist with:\n• Tax calculations and planning\n• RRSP and TFSA advice\n• Deductions and credits\n• CRA deadlines and requirements\n\nCould you please rephrase your question or ask about a specific Canadian tax topic?",
+      confidence: 60,
+      sources: ['Canadian Tax AI Assistant'],
+      aiInsight: true,
+      suggestedActions: [
+        'Calculate my taxes', 
+        'RRSP vs TFSA advice', 
+        'Find tax deductions', 
+        'Check tax deadlines'
+      ],
+      responseType: 'error_fallback',
+      timestamp: new Date().toISOString(),
+      metadata: {
+        error: error.message,
+        userId: req.userId
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      data: errorResponse
+    });
+  }
+});
+
+// Additional utility routes for the AI system
+
+// Get conversation history
+app.get('/api/ai/history', authenticateToken, (req, res) => {
+  try {
+    const userId = req.userId;
+    const history = enhancedCanadianTaxAI.getConversationHistory(userId);
+    
+    res.json({
+      success: true,
+      data: {
+        history: history.slice(-20), // Last 20 messages
+        count: history.length
+      }
+    });
+  } catch (error) {
+    console.error('Error getting chat history:', error);
     res.status(500).json({
       success: false,
-      message: 'AI chat service temporarily unavailable'
+      message: 'Failed to retrieve chat history'
+    });
+  }
+});
+
+// Clear conversation history
+app.delete('/api/ai/history', authenticateToken, (req, res) => {
+  try {
+    const userId = req.userId;
+    const cleared = enhancedCanadianTaxAI.clearConversationHistory(userId);
+    
+    res.json({
+      success: true,
+      data: {
+        cleared: cleared,
+        message: 'Conversation history cleared successfully'
+      }
+    });
+  } catch (error) {
+    console.error('Error clearing chat history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear chat history'
+    });
+  }
+});
+
+// Get AI system stats (for monitoring)
+app.get('/api/ai/stats', authenticateToken, (req, res) => {
+  try {
+    const stats = enhancedCanadianTaxAI.getStats();
+    
+    res.json({
+      success: true,
+      data: {
+        ...stats,
+        serverUptime: process.uptime(),
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error getting AI stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve AI statistics'
+    });
+  }
+});
+
+// Test AI endpoint (for debugging)
+app.post('/api/ai/test', authenticateToken, [
+  body('message').trim().isLength({ min: 1 })
+], async (req, res) => {
+  try {
+    const { message } = req.body;
+    const userId = req.userId;
+    
+    const testContext = {
+      province: 'ON',
+      income: 75000,
+      filingStatus: 'single',
+      activeTab: 'Test',
+      hasDocuments: false,
+      documentCount: 0
+    };
+
+    const response = await enhancedCanadianTaxAI.generateResponse(message, userId, testContext);
+    
+    res.json({
+      success: true,
+      data: {
+        ...response,
+        testMode: true,
+        contextUsed: testContext
+      }
+    });
+  } catch (error) {
+    console.error('AI test error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'AI test failed',
+      error: error.message
     });
   }
 });

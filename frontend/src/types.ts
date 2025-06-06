@@ -6,10 +6,13 @@ export interface TaxFormData {
 }
 
 export interface ChatMessage {
+  id?: string; 
   type: 'user' | 'bot';
   message: string;
   time: string;
   confidence?: number;
+  sources?: string[];
+  suggestedActions?: string[];
   aiInsight?: boolean;
   isError?: boolean;
 }
@@ -69,14 +72,14 @@ export interface AuthModalProps {
 
 export interface ChatModalProps {
   chatMessages: ChatMessage[];
-  setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  setChatMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;  // ← Fix this line
   setShowChat: (show: boolean) => void;
   isLoading: boolean;
   setIsLoading: (loading: boolean) => void;
   activeTab: string;
-  taxFormData: TaxFormData;
-  uploadedFiles: UploadedFile[];
-  selectedProvince: string;
+  taxFormData?: any;
+  uploadedFiles?: any[];
+  selectedProvince?: string;
 }
 
 export interface DashboardProps {
