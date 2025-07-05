@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const fs = require('fs');
-const { enhancedCanadianTaxAI } = require('./ai-chatbot-enhanced');
+const { enhancedCanadianTaxAI } = require('./ai-chatbot');
 
 dotenv.config();
 
@@ -255,58 +255,6 @@ const calculateCanadianTax = (income, deductions, filingStatus, province = 'ON')
     provinceName: provinceInfo.name,
     salesTax: getSalesTaxInfo(province),
     aiOptimizations: generateTaxOptimizations(income, taxableIncome, rrspRoom, tfsaRoom)
-  };
-};
-
-// AI Response Generator
-const generateEnhancedCanadianTaxResponse = (message, userContext) => {
-  const lowerMessage = message.toLowerCase();
-  const province = userContext.province || 'ON';
-  const income = userContext.income;
-  const userName = userContext.userName || 'there';
-
-  if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
-    return {
-      message: `Hello ${userName}! I'm your Canadian AI Tax Assistant specializing in CRA regulations and ${getProvinceInfo(province).name} tax laws. I can help you with tax calculations, RRSP planning, document requirements, and CRA compliance. What tax question can I help you with today?`,
-      confidence: 95,
-      sources: ['Canadian CRA Tax Expert'],
-      aiInsight: true,
-      suggestedActions: ['Calculate my taxes', 'RRSP optimization', 'Tax document requirements'],
-      responseType: 'canadian_greeting'
-    };
-  }
-
-  if (lowerMessage.includes('rrsp')) {
-    const rrspRoom = income ? Math.min(income * 0.18, 31560) : 31560;
-    return {
-      message: `Great question about RRSPs! For 2024, the RRSP contribution limit is 18% of your previous year's income, up to $31,560. ${income ? `Based on your income of $${income.toLocaleString()}, your maximum RRSP contribution would be $${rrspRoom.toLocaleString()}.` : `The maximum contribution for 2024 is $31,560.`} Remember, the contribution deadline is March 1, 2025 for the 2024 tax year.`,
-      confidence: 92,
-      sources: ['CRA RRSP Guidelines 2024'],
-      aiInsight: true,
-      suggestedActions: ['Calculate exact RRSP room', 'Compare RRSP vs TFSA', 'Set up automatic contributions'],
-      responseType: 'canadian_rrsp_advice'
-    };
-  }
-
-  if (lowerMessage.includes('tfsa')) {
-    return {
-      message: `TFSA is excellent for tax-free growth! The 2024 contribution limit is $7,000. Unlike RRSPs, TFSA contributions aren't tax-deductible, but all growth and withdrawals are completely tax-free. Your TFSA room accumulates from when you turned 18 and became a Canadian resident.`,
-      confidence: 91,
-      sources: ['CRA TFSA Guidelines 2024'],
-      aiInsight: true,
-      suggestedActions: ['Check TFSA contribution room', 'Compare investment options', 'TFSA vs RRSP comparison'],
-      responseType: 'canadian_tfsa_advice'
-    };
-  }
-
-  // Default response
-  return {
-    message: `That's a great Canadian tax question! As your CRA specialist, I can help you with federal and provincial tax calculations, RRSP and TFSA planning, eligible deductions and credits, tax filing deadlines, and CRA compliance for ${getProvinceInfo(province).name}. What specific Canadian tax topic would you like to explore?`,
-    confidence: 85,
-    sources: ['Canadian CRA Tax Expert'],
-    aiInsight: true,
-    suggestedActions: ['Ask about RRSP planning', 'Calculate my taxes', 'Learn about tax credits', 'Check filing requirements'],
-    responseType: 'canadian_tax_general'
   };
 };
 
@@ -595,34 +543,34 @@ app.post('/api/ai/chat', authenticateToken, [
   try {
     const { message, context = {} } = req.body;
     const userId = req.userId;
-    
+
     console.log(`🤖 AI Chat Request from user ${userId}: "${message.substring(0, 50)}..."`);
-    
+
     // Get user data for context
     const user = await findUserData({ id: userId });
-    
+
     // Build comprehensive user context
     const userContext = {
       // User profile data
       userName: user?.name,
       userEmail: user?.email,
       province: user?.province || context.selectedProvince || 'ON',
-      
+
       // Tax form data
       income: context.taxFormData?.income ? parseFloat(context.taxFormData.income) : null,
       deductions: context.taxFormData?.deductions ? parseFloat(context.taxFormData.deductions) : null,
       filingStatus: context.taxFormData?.filingStatus || null,
       taxYear: context.taxFormData?.taxYear || '2024',
-      
+
       // App context
       activeTab: context.activeTab || 'Dashboard',
       hasDocuments: (context.documentsCount || 0) > 0,
       documentCount: context.documentsCount || 0,
       uploadedFileTypes: context.uploadedFileTypes || [],
-      
+
       // Chat history context
       chatHistory: context.chatHistory || [],
-      
+
       // Additional context
       timestamp: new Date().toISOString(),
       userAgent: req.get('User-Agent'),
@@ -640,7 +588,7 @@ app.post('/api/ai/chat', authenticateToken, [
     const startTime = Date.now();
     const aiResponse = await enhancedCanadianTaxAI.generateResponse(message, userId, userContext);
     const responseTime = Date.now() - startTime;
-    
+
     console.log(`✅ AI Response generated in ${responseTime}ms with confidence: ${aiResponse.confidence}%`);
 
     // Format response for frontend
@@ -678,7 +626,7 @@ app.post('/api/ai/chat', authenticateToken, [
 
   } catch (error) {
     console.error('❌ AI Chat Error:', error);
-    
+
     // Enhanced error response
     const errorResponse = {
       message: "I apologize, but I'm having trouble processing your request right now. Let me try to help with a general Canadian tax response instead!\n\n🇨🇦 I can assist with:\n• Tax calculations and planning\n• RRSP and TFSA advice\n• Deductions and credits\n• CRA deadlines and requirements\n\nCould you please rephrase your question or ask about a specific Canadian tax topic?",
@@ -686,9 +634,9 @@ app.post('/api/ai/chat', authenticateToken, [
       sources: ['Canadian Tax AI Assistant'],
       aiInsight: true,
       suggestedActions: [
-        'Calculate my taxes', 
-        'RRSP vs TFSA advice', 
-        'Find tax deductions', 
+        'Calculate my taxes',
+        'RRSP vs TFSA advice',
+        'Find tax deductions',
         'Check tax deadlines'
       ],
       responseType: 'error_fallback',
@@ -713,7 +661,7 @@ app.get('/api/ai/history', authenticateToken, (req, res) => {
   try {
     const userId = req.userId;
     const history = enhancedCanadianTaxAI.getConversationHistory(userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -735,7 +683,7 @@ app.delete('/api/ai/history', authenticateToken, (req, res) => {
   try {
     const userId = req.userId;
     const cleared = enhancedCanadianTaxAI.clearConversationHistory(userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -756,7 +704,7 @@ app.delete('/api/ai/history', authenticateToken, (req, res) => {
 app.get('/api/ai/stats', authenticateToken, (req, res) => {
   try {
     const stats = enhancedCanadianTaxAI.getStats();
-    
+
     res.json({
       success: true,
       data: {
@@ -781,7 +729,7 @@ app.post('/api/ai/test', authenticateToken, [
   try {
     const { message } = req.body;
     const userId = req.userId;
-    
+
     const testContext = {
       province: 'ON',
       income: 75000,
@@ -792,7 +740,7 @@ app.post('/api/ai/test', authenticateToken, [
     };
 
     const response = await enhancedCanadianTaxAI.generateResponse(message, userId, testContext);
-    
+
     res.json({
       success: true,
       data: {
@@ -811,12 +759,406 @@ app.post('/api/ai/test', authenticateToken, [
   }
 });
 
-// Error handling
+// Document upload and management routes
+app.post('/api/documents/upload', authenticateToken, upload.single('document'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    const document = {
+      id: generateId(),
+      userId: req.userId,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      uploadDate: new Date(),
+      category: req.body.category || 'other'
+    };
+
+    documents.push(document);
+
+    res.json({
+      success: true,
+      message: 'Document uploaded successfully',
+      data: document
+    });
+  } catch (error) {
+    console.error('Document upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload document'
+    });
+  }
+});
+
+app.get('/api/documents', authenticateToken, (req, res) => {
+  try {
+    const userDocuments = documents.filter(doc => doc.userId === req.userId);
+
+    res.json({
+      success: true,
+      data: userDocuments
+    });
+  } catch (error) {
+    console.error('Get documents error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve documents'
+    });
+  }
+});
+
+app.delete('/api/documents/:id', authenticateToken, (req, res) => {
+  try {
+    const documentIndex = documents.findIndex(doc =>
+      doc.id === req.params.id && doc.userId === req.userId
+    );
+
+    if (documentIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Document not found'
+      });
+    }
+
+    const document = documents[documentIndex];
+
+    // Delete file from filesystem
+    const filePath = path.join(uploadsDir, document.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    documents.splice(documentIndex, 1);
+
+    res.json({
+      success: true,
+      message: 'Document deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete document error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete document'
+    });
+  }
+});
+
+// Tax form routes
+app.post('/api/tax-forms', authenticateToken, [
+  body('income').isNumeric(),
+  body('deductions').isNumeric(),
+  body('province').isLength({ min: 2, max: 2 }),
+  body('filingStatus').isIn(['single', 'married_joint', 'married_separate', 'head_of_household']),
+  body('taxYear').isNumeric()
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation errors',
+      errors: errors.array()
+    });
+  }
+
+  try {
+    const taxForm = {
+      id: generateId(),
+      userId: req.userId,
+      ...req.body,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    taxForms.push(taxForm);
+
+    res.json({
+      success: true,
+      message: 'Tax form saved successfully',
+      data: taxForm
+    });
+  } catch (error) {
+    console.error('Save tax form error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save tax form'
+    });
+  }
+});
+
+app.get('/api/tax-forms', authenticateToken, (req, res) => {
+  try {
+    const userTaxForms = taxForms.filter(form => form.userId === req.userId);
+
+    res.json({
+      success: true,
+      data: userTaxForms
+    });
+  } catch (error) {
+    console.error('Get tax forms error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve tax forms'
+    });
+  }
+});
+
+app.get('/api/tax-forms/:id', authenticateToken, (req, res) => {
+  try {
+    const taxForm = taxForms.find(form =>
+      form.id === req.params.id && form.userId === req.userId
+    );
+
+    if (!taxForm) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tax form not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: taxForm
+    });
+  } catch (error) {
+    console.error('Get tax form error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve tax form'
+    });
+  }
+});
+
+app.put('/api/tax-forms/:id', authenticateToken, [
+  body('income').optional().isNumeric(),
+  body('deductions').optional().isNumeric(),
+  body('province').optional().isLength({ min: 2, max: 2 }),
+  body('filingStatus').optional().isIn(['single', 'married_joint', 'married_separate', 'head_of_household']),
+  body('taxYear').optional().isNumeric()
+], (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation errors',
+      errors: errors.array()
+    });
+  }
+
+  try {
+    const taxFormIndex = taxForms.findIndex(form =>
+      form.id === req.params.id && form.userId === req.userId
+    );
+
+    if (taxFormIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tax form not found'
+      });
+    }
+
+    taxForms[taxFormIndex] = {
+      ...taxForms[taxFormIndex],
+      ...req.body,
+      updatedAt: new Date()
+    };
+
+    res.json({
+      success: true,
+      message: 'Tax form updated successfully',
+      data: taxForms[taxFormIndex]
+    });
+  } catch (error) {
+    console.error('Update tax form error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update tax form'
+    });
+  }
+});
+
+app.delete('/api/tax-forms/:id', authenticateToken, (req, res) => {
+  try {
+    const taxFormIndex = taxForms.findIndex(form =>
+      form.id === req.params.id && form.userId === req.userId
+    );
+
+    if (taxFormIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tax form not found'
+      });
+    }
+
+    taxForms.splice(taxFormIndex, 1);
+
+    res.json({
+      success: true,
+      message: 'Tax form deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete tax form error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete tax form'
+    });
+  }
+});
+
+// User profile routes
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const user = await findUserData({ id: req.userId });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const { password, ...userWithoutPassword } = user;
+
+    res.json({
+      success: true,
+      data: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve profile'
+    });
+  }
+});
+
+app.put('/api/user/profile', authenticateToken, [
+  body('name').optional().trim().isLength({ min: 1 }),
+  body('email').optional().isEmail().normalizeEmail(),
+  body('province').optional().isLength({ min: 2, max: 2 })
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation errors',
+      errors: errors.array()
+    });
+  }
+
+  try {
+    const userIndex = users.findIndex(u => u.id === req.userId);
+
+    if (userIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Check if email is being changed and if it's already taken
+    if (req.body.email && req.body.email !== users[userIndex].email) {
+      const existingUser = await findUserData({ email: req.body.email });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already in use'
+        });
+      }
+    }
+
+    users[userIndex] = {
+      ...users[userIndex],
+      ...req.body,
+      updatedAt: new Date()
+    };
+
+    const { password, ...userWithoutPassword } = users[userIndex];
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update profile'
+    });
+  }
+});
+
+// Dashboard stats route
+app.get('/api/dashboard/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const userTaxForms = taxForms.filter(form => form.userId === userId);
+    const userDocuments = documents.filter(doc => doc.userId === userId);
+
+    // Get latest tax form for quick stats
+    const latestForm = userTaxForms.length > 0 ?
+      userTaxForms.reduce((latest, current) =>
+        new Date(current.updatedAt) > new Date(latest.updatedAt) ? current : latest
+      ) : null;
+
+    let taxCalculation = null;
+    if (latestForm) {
+      taxCalculation = calculateCanadianTax(
+        parseFloat(latestForm.income),
+        parseFloat(latestForm.deductions),
+        latestForm.filingStatus,
+        latestForm.province
+      );
+    }
+
+    const stats = {
+      totalForms: userTaxForms.length,
+      totalDocuments: userDocuments.length,
+      latestForm: latestForm,
+      taxCalculation: taxCalculation,
+      documentsSize: userDocuments.reduce((total, doc) => total + doc.size, 0),
+      lastActivity: userTaxForms.length > 0 || userDocuments.length > 0 ?
+        Math.max(
+          ...userTaxForms.map(f => new Date(f.updatedAt).getTime()),
+          ...userDocuments.map(d => new Date(d.uploadDate).getTime())
+        ) : null
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve dashboard stats'
+    });
+  }
+});
+
+// Error handling middleware
 app.use((error, req, res, next) => {
-  console.error('Server error:', error.message);
+  console.error('Server error:', error);
+
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File size too large. Maximum size is 10MB.'
+      });
+    }
+  }
+
   res.status(500).json({
     success: false,
-    message: error.message || 'Internal server error'
+    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
   });
 });
 
@@ -824,16 +1166,30 @@ app.use((error, req, res, next) => {
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: 'API endpoint not found'
   });
 });
 
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 SIGINT received, shutting down gracefully');
+  process.exit(0);
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`\n🍁 Canadian Tax Prep AI Backend Server is running on port ${PORT}!`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🌐 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🏛️ Tax System: Canada Revenue Agency (CRA) 2024`);
   console.log(`🤖 AI Features: Enhanced Canadian Tax Intelligence`);
+  console.log(`💾 Storage: In-memory (development mode)`);
+  console.log(`🔐 Security: JWT Authentication, Rate Limiting, Helmet`);
   console.log('\n✅ Ready to accept Canadian tax calculations!\n');
 });
 
